@@ -1,119 +1,194 @@
-use bevy::pbr::{MeshPipeline, PbrPlugin};
-use bevy::prelude::*;
-use bevy::render::render_graph::{Node, NodeRunError, RenderGraph, RenderGraphContext};
-use bevy::render::renderer::RenderContext;
-use bevy::render::RenderApp;
+use std::borrow::Cow;
 
-mod pbr_material;
-use pbr_material::PbrMaterial;
+use winit::{
+	event::{Event, WindowEvent},
+	event_loop::{ControlFlow, EventLoop},
+	window::{Window, WindowId},
+};
 
-fn main() {
-	App::new()
-		.add_plugins(
-			DefaultPlugins
-				.build()
-				.add_after::<ImagePlugin, _>(RendererPlugin),
-		)
-		.add_startup_system(setup_scene)
-		.run();
+struct App {
+	window: Window,
+	instance: wgpu::Instance,
+	surface: wgpu::Surface,
+	adapter: wgpu::Adapter,
+	device: wgpu::Device,
+	queue: wgpu::Queue,
+	shader: wgpu::ShaderModule,
+	pipeline_layout: wgpu::PipelineLayout,
+	render_pipeline: wgpu::RenderPipeline,
+	config: wgpu::SurfaceConfiguration,
 }
 
-fn setup_scene(
-	mut commands: Commands,
-	mut meshes: ResMut<Assets<Mesh>>,
-	mut materials: ResMut<Assets<PbrMaterial>>,
-) {
-	// Add a camera so we can see the debug-render
-	// commands.spawn(Camera3dBundle {
-	// 	transform: Transform::from_xyz(-3.0, 3.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
-	// 	..default()
-	// });
+impl App {
+	async fn new(event_loop: &EventLoop<()>) -> anyhow::Result<Self> {
+		let window = Window::new(&event_loop)?;
+		let size = window.inner_size();
+		let instance = wgpu::Instance::default();
+		let surface = unsafe { instance.create_surface(&window) }?;
 
-	// create a sphere mesh
-	let sphere_mesh = meshes.add(
-		Mesh::try_from(shape::Icosphere {
-			subdivisions: 4,
-			radius: 1.0,
-		})
-		.unwrap(),
-	);
+		let adapter = instance
+			.request_adapter(&wgpu::RequestAdapterOptions {
+				power_preference: wgpu::PowerPreference::default(),
+				force_fallback_adapter: false,
+				// Request an adapter which can render to our surface
+				compatible_surface: Some(&surface),
+			})
+			.await
+			.expect("Failed to find an appropriate adapter");
 
-	// create a standard material
-	let sphere_material = materials.add(PbrMaterial {
-		base_color: Color::rgb(0.8, 0.7, 0.6),
-		metallic: 0.2,
-		perceptual_roughness: 0.7,
-		..default()
-	});
+		let swapchain_capabilities = surface.get_capabilities(&adapter);
+		let swapchain_format = swapchain_capabilities.formats[0];
 
-	// create a PbrBundle with the sphere mesh and material
-	// commands.spawn(MaterialMeshBundle {
-	// 	mesh: sphere_mesh,
-	// 	material: sphere_material,
-	// 	transform: Transform::from_xyz(0.0, 0.0, 0.0),
-	// 	..default()
-	// });
-
-	// commands.spawn(SpotLightBundle {
-	// 	spot_light: SpotLight {
-	// 		color: Color::WHITE,
-	// 		intensity: 500.0,
-	// 		..default()
-	// 	},
-	// 	transform: Transform::from_xyz(2., 3., 2.).looking_at(Vec3::ZERO, Vec3::Y),
-	// 	..default()
-	// });
-}
-
-// Plugin to add systems related to the Renderer
-pub struct RendererPlugin;
-
-impl Plugin for RendererPlugin {
-	fn build(&self, app: &mut App) {
-		app.init_resource::<MeshPipeline>();
-
-		app.register_asset_reflect::<PbrMaterial>()
-			.add_plugin(MaterialPlugin::<PbrMaterial>::default());
-		app.world
-			.resource_mut::<Assets<PbrMaterial>>()
-			.set_untracked(
-				Handle::<PbrMaterial>::default(),
-				PbrMaterial {
-					base_color: Color::rgb(1.0, 0.0, 0.5),
-					..default()
+		// Create the logical device and command queue
+		let (device, queue) = adapter
+			.request_device(
+				&wgpu::DeviceDescriptor {
+					label: None,
+					features: wgpu::Features::empty(),
+					// Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
+					limits: wgpu::Limits::downlevel_webgl2_defaults()
+						.using_resolution(adapter.limits()),
 				},
-			);
+				None,
+			)
+			.await
+			.expect("Failed to create device");
 
-		let render_app = match app.get_sub_app_mut(RenderApp) {
-			Ok(render_app) => render_app,
-			Err(_) => return,
+		// Load the shaders from disk
+		let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+			label: None,
+			source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+		});
+
+		let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+			label: None,
+			bind_group_layouts: &[],
+			push_constant_ranges: &[],
+		});
+
+		let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+			label: None,
+			layout: Some(&pipeline_layout),
+			vertex: wgpu::VertexState {
+				module: &shader,
+				entry_point: "vs_main",
+				buffers: &[],
+			},
+			fragment: Some(wgpu::FragmentState {
+				module: &shader,
+				entry_point: "fs_main",
+				targets: &[Some(swapchain_format.into())],
+			}),
+			primitive: wgpu::PrimitiveState::default(),
+			depth_stencil: None,
+			multisample: wgpu::MultisampleState::default(),
+			multiview: None,
+		});
+
+		let config = wgpu::SurfaceConfiguration {
+			usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+			format: swapchain_format,
+			width: size.width,
+			height: size.height,
+			present_mode: wgpu::PresentMode::Fifo,
+			alpha_mode: swapchain_capabilities.alpha_modes[0],
+			view_formats: vec![],
 		};
 
-		let ray_tracing_pass_node = RayTracingPassNode {};
+		surface.configure(&device, &config);
 
-		let mut graph = render_app.world.resource_mut::<RenderGraph>();
-		let draw_3d_graph = graph
-			.get_sub_graph_mut(bevy::core_pipeline::core_3d::graph::NAME)
-			.unwrap();
-
-		draw_3d_graph.add_node("rt_node", ray_tracing_pass_node);
-		draw_3d_graph.add_node_edge(
-			"rt_node",
-			bevy::core_pipeline::core_3d::graph::node::MAIN_PASS,
-		);
+		Ok(Self {
+			window,
+			instance,
+			surface,
+			adapter,
+			device,
+			queue,
+			shader,
+			pipeline_layout,
+			render_pipeline,
+			config,
+		})
 	}
 }
 
-struct RayTracingPassNode {}
+impl App {
+	async fn run(mut self, event_loop: EventLoop<()>) -> anyhow::Result<()> {
+		event_loop.run(move |event, _, control_flow| {
+			// Have the closure take ownership of the resources.
+			// `event_loop.run` never returns, therefore we must do this to ensure
+			// the resources are properly cleaned up.
+			let _ = (
+				&self.instance,
+				&self.adapter,
+				&self.shader,
+				&self.pipeline_layout,
+			);
 
-impl Node for RayTracingPassNode {
-	fn run(
-		&self,
-		graph: &mut RenderGraphContext,
-		render_context: &mut RenderContext,
-		world: &World,
-	) -> Result<(), NodeRunError> {
-		dbg!(graph.input_info());
-		Ok(())
+			*control_flow = ControlFlow::Wait;
+			match event {
+				Event::WindowEvent { event, .. } => self.handle_window_event(event, control_flow),
+				Event::RedrawRequested(window_id) => self.handle_redraw(window_id),
+				_ => {}
+			}
+		});
 	}
+
+	fn handle_window_event(&mut self, event: WindowEvent, control_flow: &mut ControlFlow) {
+		match event {
+			WindowEvent::Resized(size) => {
+				// Reconfigure the surface with the new size
+				self.config.width = size.width;
+				self.config.height = size.height;
+				self.surface.configure(&self.device, &self.config);
+				// On macos the window needs to be redrawn manually after resizing
+				self.window.request_redraw();
+			}
+			WindowEvent::CloseRequested => control_flow.set_exit(),
+			_ => (),
+		}
+	}
+
+	fn handle_redraw(&mut self, _window_id: WindowId) {
+		let frame = self
+			.surface
+			.get_current_texture()
+			.expect("Failed to acquire next swap chain texture");
+		let view = frame
+			.texture
+			.create_view(&wgpu::TextureViewDescriptor::default());
+		let mut encoder = self
+			.device
+			.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+		{
+			let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+				label: None,
+				color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+					view: &view,
+					resolve_target: None,
+					ops: wgpu::Operations {
+						load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
+						store: true,
+					},
+				})],
+				depth_stencil_attachment: None,
+			});
+			render_pass.set_pipeline(&self.render_pipeline);
+			render_pass.draw(0..3, 0..1);
+		}
+
+		self.queue.submit(Some(encoder.finish()));
+		frame.present();
+	}
+}
+
+#[pollster::main]
+async fn main() -> anyhow::Result<()> {
+	env_logger::init();
+
+	let event_loop = EventLoop::new();
+	App::new(&event_loop).await?.run(event_loop).await?;
+
+	Ok(())
 }

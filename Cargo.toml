@@ -16,18 +16,10 @@ opt-level = 1
 inherits = "release"
 lto = "fat"
 
-[dependencies.bevy]
-version = "0.10"
-default-features = false
-features = [
-	"wayland",
-	"bevy_winit",
-	"bevy_render",
-	"bevy_core_pipeline",
-	"bevy_pbr",
-]
-
 [dependencies]
-bevy_asset_loader = { version = "0.15" }
-indoc = "2.0"
+anyhow = "1.0.70"
+env_logger = "0.10.0"
+pollster = { version = "0.3.0", features = ["macro"] }
 rand = { version = "0.8" }
+wgpu = "0.15.1"
+winit = "0.28.3"
