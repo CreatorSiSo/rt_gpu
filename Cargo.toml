@@ -18,8 +18,9 @@ lto = "fat"
 
 [dependencies]
 anyhow = "1.0.70"
+bytemuck = { version = "1.13.1", features = ["derive"] }
 env_logger = "0.10.0"
-glam = "0.23.0"
+glam = { version = "0.23.0", features = ["bytemuck"] }
 pollster = { version = "0.3.0", features = ["macro"] }
 rand = { version = "0.8" }
 wgpu = "0.15.1"

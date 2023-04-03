@@ -1,22 +1,17 @@
-use glam::Vec3;
 use winit::dpi::PhysicalSize;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
 
 mod renderer;
-use renderer::Renderer;
-
-enum Object {
-	Sphere { pos: Vec3, radius: f32 },
-}
+use renderer::{Renderer, Sphere};
 
 struct App {
 	window: Window,
 	surface: wgpu::Surface,
 	config: wgpu::SurfaceConfiguration,
 	renderer: Renderer,
-	scene: Vec<Object>,
+	scene: Vec<Sphere>,
 }
 
 impl App {
@@ -61,7 +56,7 @@ impl App {
 		})
 	}
 
-	fn with_objects(mut self, mut objects: Vec<Object>) -> Self {
+	fn with_objects(mut self, mut objects: Vec<Sphere>) -> Self {
 		self.scene.append(&mut objects);
 		self
 	}
@@ -107,12 +102,6 @@ impl App {
 		match event {
 			WindowEvent::CloseRequested => control_flow.set_exit(),
 			WindowEvent::Resized(size) => self.resize(size),
-			WindowEvent::CursorMoved { position, .. } => self.renderer.set_clear_color(
-				position.x / self.window.inner_size().width as f64,
-				position.y / self.window.inner_size().height as f64,
-				0.0,
-				1.0,
-			),
 			_ => {}
 		}
 	}
@@ -141,10 +130,11 @@ async fn main() -> anyhow::Result<()> {
 	let event_loop = EventLoop::new();
 	App::new(&event_loop)
 		.await?
-		.with_objects(vec![Object::Sphere {
-			pos: Vec3::ZERO,
-			radius: 1.0,
-		}])
+		// .with_objects(vec![Sphere {
+		// 	radius: 1.0,
+		// 	position: Vec3::ZERO,
+		// color: Vec3::new(0.6, 0.4, 0.1),
+		// }])
 		.run(event_loop)?;
 
 	Ok(())
