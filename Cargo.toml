@@ -19,6 +19,7 @@ lto = "fat"
 [dependencies]
 anyhow = "1.0.70"
 env_logger = "0.10.0"
+glam = "0.23.0"
 pollster = { version = "0.3.0", features = ["macro"] }
 rand = { version = "0.8" }
 wgpu = "0.15.1"

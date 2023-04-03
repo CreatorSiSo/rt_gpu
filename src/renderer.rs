@@ -1,33 +1,16 @@
 use std::borrow::Cow;
 
-use winit::{dpi::PhysicalSize, window::Window};
-
 pub struct Renderer {
-	surface: wgpu::Surface,
-	device: wgpu::Device,
+	pub device: wgpu::Device,
 	queue: wgpu::Queue,
 	render_pipeline: wgpu::RenderPipeline,
-	config: wgpu::SurfaceConfiguration,
 }
 
 impl Renderer {
-	pub async fn new(window: &Window) -> anyhow::Result<Self> {
-		let instance = wgpu::Instance::default();
-		let surface = unsafe { instance.create_surface(&window) }?;
-
-		let adapter = instance
-			.request_adapter(&wgpu::RequestAdapterOptions {
-				power_preference: wgpu::PowerPreference::default(),
-				force_fallback_adapter: false,
-				// Request an adapter which can render to our surface
-				compatible_surface: Some(&surface),
-			})
-			.await
-			.expect("Failed to find an appropriate adapter");
-
-		let swapchain_capabilities = surface.get_capabilities(&adapter);
-		let swapchain_format = swapchain_capabilities.formats[0];
-
+	pub async fn new(
+		adapter: wgpu::Adapter,
+		swapchain_format: wgpu::TextureFormat,
+	) -> anyhow::Result<Self> {
 		// Create the logical device and command queue
 		let (device, queue) = adapter
 			.request_device(
@@ -40,8 +23,7 @@ impl Renderer {
 				},
 				None,
 			)
-			.await
-			.expect("Failed to create device");
+			.await?;
 
 		// Load the shaders from disk
 		let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -74,55 +56,33 @@ impl Renderer {
 			multiview: None,
 		});
 
-		let size = window.inner_size();
-		let config = wgpu::SurfaceConfiguration {
-			usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-			format: swapchain_format,
-			width: size.width,
-			height: size.height,
-			present_mode: wgpu::PresentMode::Fifo,
-			alpha_mode: swapchain_capabilities.alpha_modes[0],
-			view_formats: vec![],
-		};
-
-		surface.configure(&device, &config);
-
 		Ok(Self {
-			surface,
 			device,
 			queue,
 			render_pipeline,
-			config,
 		})
 	}
 
-	pub fn resize(&mut self, size: PhysicalSize<u32>) {
-		// Reconfigure the surface with the new size
-		self.config.width = size.width;
-		self.config.height = size.height;
-		self.surface.configure(&self.device, &self.config);
-	}
-
-	pub fn draw(&mut self) {
-		let frame = self
-			.surface
-			.get_current_texture()
-			.expect("Failed to acquire next swap chain texture");
-		let view = frame
-			.texture
-			.create_view(&wgpu::TextureViewDescriptor::default());
+	/// Renders the next frame into the provided [`wgpu::Texture`]
+	pub fn render(&mut self, texture: &wgpu::Texture) {
+		let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 		let mut encoder = self
 			.device
 			.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
 		{
 			let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-				label: None,
+				label: Some("Render Pass"),
 				color_attachments: &[Some(wgpu::RenderPassColorAttachment {
 					view: &view,
 					resolve_target: None,
 					ops: wgpu::Operations {
-						load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
+						load: wgpu::LoadOp::Clear(wgpu::Color {
+							r: 0.1,
+							g: 0.2,
+							b: 0.3,
+							a: 1.0,
+						}),
 						store: true,
 					},
 				})],
@@ -132,7 +92,6 @@ impl Renderer {
 			render_pass.draw(0..3, 0..1);
 		}
 
-		self.queue.submit(Some(encoder.finish()));
-		frame.present();
+		self.queue.submit(std::iter::once(encoder.finish()));
 	}
 }
