@@ -4,6 +4,7 @@ pub struct Renderer {
 	pub device: wgpu::Device,
 	queue: wgpu::Queue,
 	render_pipeline: wgpu::RenderPipeline,
+	clear_color: wgpu::Color,
 }
 
 impl Renderer {
@@ -60,6 +61,12 @@ impl Renderer {
 			device,
 			queue,
 			render_pipeline,
+			clear_color: wgpu::Color {
+				r: 0.5,
+				g: 0.0,
+				b: 0.5,
+				a: 1.0,
+			},
 		})
 	}
 
@@ -77,12 +84,7 @@ impl Renderer {
 					view: &view,
 					resolve_target: None,
 					ops: wgpu::Operations {
-						load: wgpu::LoadOp::Clear(wgpu::Color {
-							r: 0.1,
-							g: 0.2,
-							b: 0.3,
-							a: 1.0,
-						}),
+						load: wgpu::LoadOp::Clear(self.clear_color),
 						store: true,
 					},
 				})],
@@ -93,5 +95,9 @@ impl Renderer {
 		}
 
 		self.queue.submit(std::iter::once(encoder.finish()));
+	}
+
+	pub fn set_clear_color(&mut self, r: f64, g: f64, b: f64, a: f64) {
+		self.clear_color = wgpu::Color { r, g, b, a };
 	}
 }

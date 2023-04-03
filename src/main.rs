@@ -105,8 +105,14 @@ impl App {
 		control_flow: &mut ControlFlow,
 	) {
 		match event {
-			WindowEvent::Resized(size) => self.resize(size),
 			WindowEvent::CloseRequested => control_flow.set_exit(),
+			WindowEvent::Resized(size) => self.resize(size),
+			WindowEvent::CursorMoved { position, .. } => self.renderer.set_clear_color(
+				position.x / self.window.inner_size().width as f64,
+				position.y / self.window.inner_size().height as f64,
+				0.0,
+				1.0,
+			),
 			_ => {}
 		}
 	}
