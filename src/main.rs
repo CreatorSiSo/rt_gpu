@@ -44,7 +44,8 @@ impl App {
 			view_formats: vec![],
 		};
 
-		let renderer = Renderer::new(adapter, swapchain_format).await?;
+		let mut renderer = Renderer::new(adapter, swapchain_format).await?;
+		renderer.update_camera(size.width, size.height);
 		surface.configure(&renderer.device, &config);
 
 		Ok(Self {
@@ -113,11 +114,13 @@ impl App {
 		Ok(())
 	}
 
-	fn resize(&mut self, size: PhysicalSize<u32>) {
+	fn resize(&mut self, PhysicalSize { width, height }: PhysicalSize<u32>) {
 		// Reconfigure the surface with the new size
-		self.config.width = size.width;
-		self.config.height = size.height;
+		self.config.width = width;
+		self.config.height = height;
 		self.surface.configure(&self.renderer.device, &self.config);
+		// Update the camera data sent to the gpu
+		self.renderer.update_camera(width, height);
 		// On macos the window needs to be redrawn manually after resizing
 		self.window.request_redraw();
 	}
