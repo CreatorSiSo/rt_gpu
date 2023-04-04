@@ -1,4 +1,4 @@
-use glam::{Vec2, Vec3};
+use glam::{Vec2, Vec3, Vec4};
 use std::borrow::Cow;
 use wgpu::util::DeviceExt;
 
@@ -11,13 +11,12 @@ pub struct CameraUniform {
 }
 
 #[repr(C)]
-#[repr(align(8))]
+#[repr(align(16))]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Sphere {
-	pub radius: f32,
 	pub position: Vec3,
-	pub color: Vec3,
-	_pad: [u32; 1],
+	pub radius: f32,
+	pub color: Vec4,
 }
 
 #[repr(C)]
@@ -124,8 +123,11 @@ impl Renderer {
 					limits: wgpu::Limits::downlevel_defaults().using_resolution(adapter.limits()),
 				},
 				None,
+				// Some(Path::new("./traces")),
 			)
 			.await?;
+
+		device.start_capture();
 
 		let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 			label: Some("Vertex Buffer"),
@@ -167,28 +169,27 @@ impl Renderer {
 			}],
 		);
 
+		let spheres = &[
+			Sphere {
+				radius: 2.0,
+				position: Vec3::new(1.0, 0.1, 0.1),
+				color: Vec4::new(1.0, 0.1, 0.1, 1.0),
+			},
+			Sphere {
+				radius: 1.5,
+				position: Vec3::new(0.1, 0.1, 0.1),
+				color: Vec4::new(0.1, 1.0, 0.1, 1.0),
+			},
+			Sphere {
+				radius: 1.0,
+				position: Vec3::new(-1.0, 0.1, 0.1),
+				color: Vec4::new(0.1, 0.1, 1.0, 1.0),
+			},
+		];
+
 		let object_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 			label: Some("Object Buffer"),
-			contents: bytemuck::cast_slice(&[
-				Sphere {
-					radius: 1.0,
-					position: Vec3::ONE,
-					color: Vec3::new(0.9, 0.4, 1.0),
-					_pad: [0],
-				},
-				Sphere {
-					radius: 1.0,
-					position: Vec3::new(0.5, 0.5, 0.5),
-					color: Vec3::new(0.6, 1.0, 0.5),
-					_pad: [0],
-				},
-				Sphere {
-					radius: 1.0,
-					position: Vec3::new(0.7, 0.5, 0.5),
-					color: Vec3::new(0.4, 0.8, 0.8),
-					_pad: [0],
-				},
-			]),
+			contents: bytemuck::cast_slice(spheres),
 			usage: wgpu::BufferUsages::STORAGE,
 		});
 
