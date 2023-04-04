@@ -172,19 +172,19 @@ impl Renderer {
 			contents: bytemuck::cast_slice(&[
 				Sphere {
 					radius: 1.0,
-					position: Vec3::ZERO,
+					position: Vec3::ONE,
 					color: Vec3::new(0.9, 0.4, 1.0),
 					_pad: [0],
 				},
 				Sphere {
 					radius: 1.0,
-					position: Vec3::ZERO,
+					position: Vec3::new(0.5, 0.5, 0.5),
 					color: Vec3::new(0.6, 1.0, 0.5),
 					_pad: [0],
 				},
 				Sphere {
 					radius: 1.0,
-					position: Vec3::ZERO,
+					position: Vec3::new(0.7, 0.5, 0.5),
 					color: Vec3::new(0.4, 0.8, 0.8),
 					_pad: [0],
 				},
