@@ -53,10 +53,10 @@ impl Vertex {
 
 #[rustfmt::skip]
 const QUAD_VERTICES: &[Vertex] = &[
-	Vertex::new(Vec3::new(-1.0, -1.0, 0.0), Vec2::new(0.0, 0.0)),
+	Vertex::new(Vec3::new(-1.0, -1.0, 0.0), Vec2::new(-1.0, -1.0)),
 	Vertex::new(Vec3::new( 1.0,  1.0, 0.0), Vec2::new(1.0, 1.0)),
-	Vertex::new(Vec3::new( 1.0, -1.0, 0.0), Vec2::new(1.0, 0.0)),
-	Vertex::new(Vec3::new(-1.0,  1.0, 0.0), Vec2::new(0.0, 1.0)),
+	Vertex::new(Vec3::new( 1.0, -1.0, 0.0), Vec2::new(1.0, -1.0)),
+	Vertex::new(Vec3::new(-1.0,  1.0, 0.0), Vec2::new(-1.0, 1.0)),
 ];
 
 #[rustfmt::skip]
@@ -171,19 +171,29 @@ impl Renderer {
 
 		let spheres = &[
 			Sphere {
-				radius: 2.0,
-				position: Vec3::new(1.0, 0.1, 0.1),
+				radius: 1.0,
+				position: Vec3::new(-2.0, 0.0, 0.0),
 				color: Vec4::new(1.0, 0.1, 0.1, 1.0),
 			},
 			Sphere {
-				radius: 1.5,
-				position: Vec3::new(0.1, 0.1, 0.1),
-				color: Vec4::new(0.1, 1.0, 0.1, 1.0),
+				radius: 0.5,
+				position: Vec3::new(-0.5, 0.0, 0.0),
+				color: Vec4::new(1.0, 0.1, 0.1, 1.0),
+			},
+			Sphere {
+				radius: 0.25,
+				position: Vec3::new(0.0, 0.0, 0.0),
+				color: Vec4::new(1.0, 0.1, 0.1, 1.0),
+			},
+			Sphere {
+				radius: 0.5,
+				position: Vec3::new(0.5, 0.0, 0.0),
+				color: Vec4::new(1.0, 0.1, 0.1, 1.0),
 			},
 			Sphere {
 				radius: 1.0,
-				position: Vec3::new(-1.0, 0.1, 0.1),
-				color: Vec4::new(0.1, 0.1, 1.0, 1.0),
+				position: Vec3::new(2.0, 0.0, 0.0),
+				color: Vec4::new(1.0, 0.1, 0.1, 1.0),
 			},
 		];
 

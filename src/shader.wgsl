@@ -47,45 +47,49 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let aspect_ratio = f32(camera.width) / f32(camera.height);
     let height = 1.0;
     let width = 1.0 * aspect_ratio;
-    // centered coordinates
-    let coord = (in.uv - 0.5) * 10.0;
+
+    let coord = vec2(in.uv.x * width, height * in.uv.y) * 2.0;
+
+    if (coord.x >= -0.01 && coord.x <= 0.01) || (coord.y >= -0.01 && coord.y <= 0.01) {
+        return vec4(0.1);
+    }
 
     var ray: Ray;
-    ray.origin = vec3(width * coord.x, height * coord.y, -2.0);
+    // ray.origin = vec3(0.0, 0.0, -2.0);
+    // ray.direction = normalize(vec3(coord.x, coord.y, 0.0) - ray.origin);
+    ray.origin = vec3(coord, -3.0);
     ray.direction = vec3(0.0, 0.0, 1.0);
 
-
-    var t: f32 = 0.0;
-    var colors: vec4<f32>;
+    var hit: Hit;
     for (var i = 0u; i <= arrayLength(&objects); i += 1u) {
-        var ray: Ray = ray;
-        let object = objects[i];
-        ray.origin += object.position;
-
-        let hit = hit_sphere(ray, object.radius);
-        if hit.valid {
-            t += hit.near;
-            colors += object.color;
+        let maybe_hit = hit_sphere(ray, objects[i]);
+        if maybe_hit.valid {
+            hit = maybe_hit;
         }
     }
 
-    return colors * t;
+    let light = dot(hit.normal, normalize(vec3(1.0, 1.0, -1.0)));
+    let color = vec3(light);
+    return vec4(color, 1.0);
 }
 
 struct Hit {
   valid: bool,
-  near: f32,
-  far: f32,
+  pos: vec3<f32>,
+	normal: vec3<f32>
 }
 
-fn hit_sphere(ray: Ray, radius: f32) -> Hit {
+fn hit_sphere(ray: Ray, sphere: Sphere) -> Hit {
     // a = ray.origin
     // b = ray.direction
     // r = sphere.radius
     // t = hit_distance
     // p = hit_point
-    let a = ray.direction;
-    let b = ray.origin;
+
+		// Accord for the sphere not beeing centered
+    let a = ray.origin - sphere.position;
+    let b = ray.direction;
+
 
     // ray
     // p = a + b*t
@@ -105,12 +109,12 @@ fn hit_sphere(ray: Ray, radius: f32) -> Hit {
     // 0 = t^2(bx^2 + by^2) + 2t(ax*bx + ay*by) + ax^2 + ay^2 - r^2
     // 0 = t^2*e + t*f + g
 
-    // e = (bx^2 + by^2)
-    // f = 2(ax*bx + ay*by)
-    // g = ax^2 + ay^2 - r^2
-    let e = (a.x * a.x) + (a.y * a.y) + (a.z * a.z);
-    let f = 2.0 * ((b.x * a.x) + (b.y * a.y) + (b.z * a.z));
-    let g = (b.x * b.x) + (b.y * b.y) + (b.z * b.z) - (radius * radius);
+    // e = (bx^2 + by^2) = b*b
+    // f = 2(ax*bx + ay*by) = 2*a*b
+    // g = ax^2 + ay^2 - r^2 = a*a - r^2
+    let e = dot(b, b);
+    let f = 2.0 * dot(a, b);
+    let g = dot(a, a) - (sphere.radius * sphere.radius);
 
     // discriminant
     // d = f^2 - 4eg
@@ -125,9 +129,11 @@ fn hit_sphere(ray: Ray, radius: f32) -> Hit {
 
     // quadratic formula
     // t = (-f +/- sqrt(d)) / 2e
-    hit.far = (-f + sqrt(d)) / (2.0 * e);
-    hit.near = (-f - sqrt(d)) / (2.0 * e);
+    let t_far = (-f + sqrt(d)) / (2.0 * e);
+    let t_near = (-f - sqrt(d)) / (2.0 * e);
 
     hit.valid = true;
+    hit.pos = ray.origin + (ray.direction * t_near);
+    hit.normal = normalize(hit.pos - sphere.position);
     return hit;
 }
