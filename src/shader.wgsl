@@ -1,3 +1,6 @@
+// IEEE 754 maximum value for 32 bit floats
+const f32_max = 3.4028235e38;
+
 struct VertexInput {
   @location(0) position: vec3<f32>,
   @location(1) uv: vec2<f32>,
@@ -22,7 +25,6 @@ struct Camera {
   width: u32,
   height: u32,
 }
-
 @group(0)
 @binding(0)
 var<uniform> camera: Camera;
@@ -32,15 +34,9 @@ struct Sphere {
   radius: f32,
   color: vec4<f32>,
 }
-
 @group(1)
 @binding(0)
-var<storage, read> objects: array<Sphere>;
-
-struct Ray {
-  origin: vec3<f32>,
-  direction: vec3<f32>
-}
+var<storage, read> spheres: array<Sphere>;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
@@ -57,29 +53,32 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // ray.direction = vec3(0.0, 0.0, 1.0);
 
     var hit: Hit;
-    hit.depth = 3.4028235e38;
-    var albedo: vec3<f32> = vec3(1.0);
-    for (var i = 0u; i <= arrayLength(&objects); i += 1u) {
-        let maybe_hit = hit_sphere(ray, objects[i]);
-        if maybe_hit.intersected && hit.depth > maybe_hit.depth {
+    hit.distance = f32_max;
+    var nearest_sphere: Sphere;
+
+    for (var i = 0u; i <= arrayLength(&spheres); i += 1u) {
+        let sphere = spheres[i];
+        let maybe_hit = hit_sphere(ray, sphere);
+        if maybe_hit.intersected && hit.distance > maybe_hit.distance {
             hit = maybe_hit;
+            nearest_sphere = sphere;
         }
     }
 
     if !hit.intersected {
-        return vec4(vec3(0.0), 1.0);
+        return vec4(0.0, 0.0, 0.0, 1.0);
     }
 
-    let light = dot(hit.normal, normalize(vec3(1.0, 1.0, -1.0)));
-    let color = vec3(light);
-    return vec4(color, 1.0);
+    let hit_pos = position_on_ray(ray, hit.distance);
+    let normal = sphere_normal(nearest_sphere, hit_pos);
+    let light = dot(normal, normalize(vec3(1.0, 1.0, -1.0)));
+    let color = nearest_sphere.color * light;
+    return color;
 }
 
 struct Hit {
   intersected: bool,
-  depth: f32,
-  position: vec3<f32>,
-  normal: vec3<f32>
+  distance: f32,
 }
 
 fn hit_sphere(ray: Ray, sphere: Sphere) -> Hit {
@@ -92,7 +91,6 @@ fn hit_sphere(ray: Ray, sphere: Sphere) -> Hit {
     // Accord for the sphere not beeing centered
     let a = ray.origin - sphere.position;
     let b = ray.direction;
-
 
     // ray
     // p = a + b*t
@@ -132,12 +130,23 @@ fn hit_sphere(ray: Ray, sphere: Sphere) -> Hit {
 
     // quadratic formula
     // t = (-f +/- sqrt(d)) / 2e
-    let t_far = (-f + sqrt(d)) / (2.0 * e);
+    // let t_far = (-f + sqrt(d)) / (2.0 * e);
     let t_near = (-f - sqrt(d)) / (2.0 * e);
 
     hit.intersected = true;
-    hit.depth = t_near;
-    hit.position = ray.origin + (ray.direction * t_near);
-    hit.normal = normalize(hit.position - sphere.position);
+    hit.distance = t_near;
     return hit;
+}
+
+fn sphere_normal(sphere: Sphere, position: vec3<f32>) -> vec3<f32> {
+    return normalize(position - sphere.position);
+}
+
+struct Ray {
+  origin: vec3<f32>,
+  direction: vec3<f32>
+}
+
+fn position_on_ray(ray: Ray, distance: f32) -> vec3<f32> {
+    return ray.origin + (ray.direction * distance);
 }

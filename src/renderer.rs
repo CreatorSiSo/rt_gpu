@@ -178,17 +178,17 @@ impl Renderer {
 			Sphere {
 				radius: 0.5,
 				position: Vec3::new(-0.5, 0.0, 0.2),
-				color: Vec4::new(1.0, 0.1, 0.1, 1.0),
+				color: Vec4::new(0.1, 1.0, 0.1, 1.0),
 			},
 			Sphere {
 				radius: 0.25,
 				position: Vec3::new(0.0, 0.0, 0.0),
-				color: Vec4::new(1.0, 0.1, 0.1, 1.0),
+				color: Vec4::new(0.1, 0.1, 1.0, 1.0),
 			},
 			Sphere {
 				radius: 0.5,
 				position: Vec3::new(0.5, 0.0, 0.2),
-				color: Vec4::new(1.0, 0.1, 0.1, 1.0),
+				color: Vec4::new(0.0, 1.0, 0.1, 1.0),
 			},
 			Sphere {
 				radius: 1.0,
