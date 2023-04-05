@@ -172,12 +172,12 @@ impl Renderer {
 		let spheres = &[
 			Sphere {
 				radius: 1.0,
-				position: Vec3::new(-2.0, 0.0, 0.0),
+				position: Vec3::new(-1.5, 0.0, 0.5),
 				color: Vec4::new(1.0, 0.1, 0.1, 1.0),
 			},
 			Sphere {
 				radius: 0.5,
-				position: Vec3::new(-0.5, 0.0, 0.0),
+				position: Vec3::new(-0.5, 0.0, 0.2),
 				color: Vec4::new(1.0, 0.1, 0.1, 1.0),
 			},
 			Sphere {
@@ -187,12 +187,12 @@ impl Renderer {
 			},
 			Sphere {
 				radius: 0.5,
-				position: Vec3::new(0.5, 0.0, 0.0),
+				position: Vec3::new(0.5, 0.0, 0.2),
 				color: Vec4::new(1.0, 0.1, 0.1, 1.0),
 			},
 			Sphere {
 				radius: 1.0,
-				position: Vec3::new(2.0, 0.0, 0.0),
+				position: Vec3::new(1.5, 0.0, 0.5),
 				color: Vec4::new(1.0, 0.1, 0.1, 1.0),
 			},
 		];
