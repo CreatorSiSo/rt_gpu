@@ -1,6 +1,6 @@
 use glam::{Vec2, Vec3, Vec4};
-use std::borrow::Cow;
-use wgpu::util::DeviceExt;
+use std::{borrow::Cow, collections::HashMap};
+use wgpu::{util::DeviceExt, PipelineCompilationOptions};
 
 #[repr(C)]
 #[repr(align(8))]
@@ -117,10 +117,9 @@ impl Renderer {
 			.request_device(
 				&wgpu::DeviceDescriptor {
 					label: None,
-					features: wgpu::Features::BUFFER_BINDING_ARRAY
+					required_features: wgpu::Features::BUFFER_BINDING_ARRAY
 						| wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY,
-					// Make sure we use the texture resolution liits from the adapter, so we can support images the size of the swapchain.
-					limits: wgpu::Limits::downlevel_defaults().using_resolution(adapter.limits()),
+					..Default::default()
 				},
 				None,
 				// Some(Path::new("./traces")),
@@ -236,18 +235,27 @@ impl Renderer {
 			layout: Some(&pipeline_layout),
 			vertex: wgpu::VertexState {
 				module: &shader,
-				entry_point: "vs_main",
+				entry_point: "vs_main".into(),
 				buffers: &[Vertex::descriptor()],
+				compilation_options: PipelineCompilationOptions {
+					constants: &HashMap::new(),
+					zero_initialize_workgroup_memory: false,
+				},
 			},
 			fragment: Some(wgpu::FragmentState {
 				module: &shader,
-				entry_point: "fs_main",
+				entry_point: "fs_main".into(),
 				targets: &[Some(swapchain_format.into())],
+				compilation_options: PipelineCompilationOptions {
+					constants: &HashMap::new(),
+					zero_initialize_workgroup_memory: false,
+				},
 			}),
 			primitive: wgpu::PrimitiveState::default(),
 			depth_stencil: None,
 			multisample: wgpu::MultisampleState::default(),
 			multiview: None,
+			cache: None,
 		});
 
 		Ok(Self {
@@ -290,10 +298,11 @@ impl Renderer {
 							b: 1.0,
 							a: 1.0,
 						}),
-						store: true,
+						store: wgpu::StoreOp::Store,
 					},
 				})],
 				depth_stencil_attachment: None,
+				..Default::default()
 			});
 
 			render_pass.set_pipeline(&self.render_pipeline);

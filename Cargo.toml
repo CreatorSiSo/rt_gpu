@@ -1,8 +1,7 @@
 [package]
-name = "rt_bevy"
+name = "rt_gpu"
 version = "0.1.0"
 edition = "2021"
-authors = ["Simon Sommer <creatorsisohd@gmail.com>"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -17,11 +16,9 @@ inherits = "release"
 lto = "fat"
 
 [dependencies]
-anyhow = "1.0.70"
-bytemuck = { version = "1.13.1", features = ["derive"] }
-env_logger = "0.10.0"
-glam = { version = "0.23.0", features = ["bytemuck"] }
-pollster = { version = "0.3.0", features = ["macro"] }
-rand = { version = "0.8" }
-wgpu = { version = "0.15.1", features = ["trace", "replay"] }
-winit = "0.28.3"
+anyhow = "1.0.97"
+bytemuck = { version = "1.22.0", features = ["derive"] }
+glam = { version = "0.30.1", features = ["bytemuck"] }
+pollster = { version = "0.4.0", features = ["macro"] }
+wgpu = { version = "24.0.3" }
+winit = "0.30.9"
