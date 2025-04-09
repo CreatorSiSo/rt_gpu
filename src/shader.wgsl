@@ -94,31 +94,35 @@ fn hit_sphere(ray: Ray, sphere: Sphere) -> Hit {
 
     // ray
     // p = a + b*t
-    // px = ax + bx*t
-    // py = ay + by*t
+    // p_x = a_x + b_x*t
+    // p_y = a_y + b_y*t
 
     // circle
-    // r^2 = (x - ox)^2 + (y - oy)^2
-    // unit circle at origin => ox; ox = 0
+    // r^2 = (x - o_x)^2 + (y - o_y)^2
+    // unit circle at origin => o = (0, 0)
     // r^2 = (x - 0)^2 + (y - 0)^2
     // r^2 = x^2 + y^2
     // 0 = x^2 + y^2 - r^2
 
-    // px = x; py = y
-    // 0 = (ax + bx*t)^2 + (ax + bx*t)^2 - r^2
-    // 0 = ax^2 + 2*ax*bx*t + bx^2*t^2 + ay^2 + 2*ay*by*t + by^2*t^2 - r^2
-    // 0 = t^2(bx^2 + by^2) + 2t(ax*bx + ay*by) + ax^2 + ay^2 - r^2
-    // 0 = t^2*e + t*f + g
+    // x = p_x
+    // y = p_y
 
-    // e = (bx^2 + by^2) = b*b
-    // f = 2(ax*bx + ay*by) = 2*a*b
-    // g = ax^2 + ay^2 - r^2 = a*a - r^2
+    // 0 = p_x^2 + p_y^2 - r^2
+    // 0 = (a_x + b_x*t)^2 + (a_y + b_y*t)^2 - r^2
+    // 0 = a_x^2 + 2*a_x*b_x*t + b_x^2 * t^2 + a_y^2 + 2*a_y*b_y*t + b_y^2 * t^2 - r^2
+    // 0 = t^2 * (b_x^2 + b_y^2) + 2t(a_x*b_x + a_y*b_y) + ax^2 + ay^2 - r^2
+    // 0 = t^2 * (b.b) + 2t(a.b) + a.a - r^2
+    // 0 = t^2 * e + t*f + g
+
+    // e = b.b
+    // f = 2*(a.b)
+    // g = a.a - r^2
     let e = dot(b, b);
     let f = 2.0 * dot(a, b);
     let g = dot(a, a) - (sphere.radius * sphere.radius);
 
     // discriminant
-    // d = f^2 - 4eg
+    // d = f^2 - 4*e*g
     let d = f * f - 4.0 * e * g;
 
     var hit: Hit;
@@ -129,7 +133,7 @@ fn hit_sphere(ray: Ray, sphere: Sphere) -> Hit {
     }
 
     // quadratic formula
-    // t = (-f +/- sqrt(d)) / 2e
+    // t = (-f +/- sqrt(d)) / 2*e
     // let t_far = (-f + sqrt(d)) / (2.0 * e);
     let t_near = (-f - sqrt(d)) / (2.0 * e);
 
