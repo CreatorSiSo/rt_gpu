@@ -282,37 +282,56 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn generate_scene(mut commands: Commands) {
-	commands.spawn_batch(vec![
+	commands.spawn_batch(
+		[
+			Sphere {
+				radius: 1.0,
+				position: Vec3::new(-1.5, 0.0, 0.5),
+				color: Vec4::new(0.0, 0.0, 0.0, 1.0),
+			},
+			Sphere {
+				radius: 0.5,
+				position: Vec3::new(-0.5, 0.0, 0.2),
+				color: Vec4::new(0.0, 0.0, 0.0, 1.0),
+			},
+			Sphere {
+				radius: 0.25,
+				position: Vec3::new(0.0, 0.00, 0.0),
+				color: Vec4::new(0.8, 0.6, 0.2, 1.0),
+			},
+			Sphere {
+				radius: 0.5,
+				position: Vec3::new(0.5, 0.0, 0.2),
+				color: Vec4::new(0.0, 0.0, 0.0, 1.0),
+			},
+			Sphere {
+				radius: 1.0,
+				position: Vec3::new(1.5, 0.0, 0.5),
+				color: Vec4::new(0.0, 0.0, 0.0, 1.0),
+			},
+		]
+		.into_iter()
+		.map(|sphere| (Animate, sphere)),
+	);
+	commands.spawn_batch([
 		Sphere {
-			radius: 1.0,
-			position: Vec3::new(-1.5, 0.0, 0.5),
-			color: Vec4::new(0.02, 0.02, 0.02, 1.0),
+			radius: 3.0,
+			position: Vec3::new(-2.5, 4.0, 1.5),
+			color: Vec4::new(0.1, 0.005, 0.005, 1.0),
 		},
 		Sphere {
-			radius: 0.5,
-			position: Vec3::new(-0.5, 0.0, 0.2),
-			color: Vec4::new(0.1, 0.1, 0.1, 1.0),
-		},
-		Sphere {
-			radius: 0.25,
-			position: Vec3::new(0.02, 0.02, 0.02),
-			color: Vec4::new(0.8, 0.6, 0.2, 1.0),
-		},
-		Sphere {
-			radius: 0.5,
-			position: Vec3::new(0.5, 0.0, 0.2),
-			color: Vec4::new(0.1, 0.1, 0.1, 1.0),
-		},
-		Sphere {
-			radius: 1.0,
-			position: Vec3::new(1.5, 0.0, 0.5),
-			color: Vec4::new(0.02, 0.02, 0.02, 1.0),
+			radius: 3.0,
+			position: Vec3::new(2.5, -4.0, 1.5),
+			color: Vec4::new(0.007, 0.007, 0.1, 1.0),
 		},
 	]);
 }
 
-fn animate_spheres(mut spheres: Query<&mut Sphere>, time: Res<Time>) {
-	for mut sphere in &mut spheres {
+#[derive(Component)]
+struct Animate;
+
+fn animate_spheres(mut spheres: Query<(&mut Sphere, &Animate)>, time: Res<Time>) {
+	for (mut sphere, _) in &mut spheres {
 		let elapsed = time.elapsed_ms() as f32;
 		let sin = f32::sin(elapsed / 1000.0 + sphere.position.x);
 		sphere.position.y = sin;
