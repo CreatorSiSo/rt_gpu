@@ -285,61 +285,36 @@ fn generate_scene(mut commands: Commands) {
 		Sphere {
 			radius: 1.0,
 			position: Vec3::new(-1.5, 0.0, 0.5),
-			color: Vec4::new(1.0, 0.1, 0.1, 1.0),
+			color: Vec4::new(0.02, 0.02, 0.02, 1.0),
 		},
 		Sphere {
 			radius: 0.5,
 			position: Vec3::new(-0.5, 0.0, 0.2),
-			color: Vec4::new(0.1, 1.0, 0.1, 1.0),
+			color: Vec4::new(0.1, 0.1, 0.1, 1.0),
 		},
 		Sphere {
 			radius: 0.25,
-			position: Vec3::new(0.0, 0.0, 0.0),
-			color: Vec4::new(0.1, 0.1, 1.0, 1.0),
+			position: Vec3::new(0.02, 0.02, 0.02),
+			color: Vec4::new(0.8, 0.6, 0.2, 1.0),
 		},
 		Sphere {
 			radius: 0.5,
 			position: Vec3::new(0.5, 0.0, 0.2),
-			color: Vec4::new(0.0, 1.0, 0.1, 1.0),
+			color: Vec4::new(0.1, 0.1, 0.1, 1.0),
 		},
 		Sphere {
 			radius: 1.0,
 			position: Vec3::new(1.5, 0.0, 0.5),
-			color: Vec4::new(1.0, 0.1, 0.1, 1.0),
+			color: Vec4::new(0.02, 0.02, 0.02, 1.0),
 		},
 	]);
 }
 
 fn animate_spheres(mut spheres: Query<&mut Sphere>, time: Res<Time>) {
-	/// Hash-like pseudo-random float generator
-	fn hash_float(mut x: f32) -> f32 {
-		x = (x * 0.1031).sin() * 43758.5453123;
-		x = x.fract();
-		if x < 0.0 {
-			x + 1.0
-		} else {
-			x
-		}
-	}
-
-	/// Pseudo-random RGB color from a single f32 seed.
-	/// Output is in [0.0, 1.0]^3, and not mirrored around 0.0.
-	pub fn pseudo_random_color(seed: f32) -> Vec4 {
-		let r = hash_float(seed + 1.23);
-		let g = hash_float(seed + 7.89);
-		let b = hash_float(seed + 4.56);
-
-		Vec4::new(r, g, b, 1.0)
-	}
-
 	for mut sphere in &mut spheres {
 		let elapsed = time.elapsed_ms() as f32;
 		let sin = f32::sin(elapsed / 1000.0 + sphere.position.x);
 		sphere.position.y = sin;
-		sphere.color = Vec4::new(0.0, 0.0, 0.0, 0.0).lerp(
-			pseudo_random_color(sphere.position.x * 50.0),
-			(sin + 1.0) / 2.0,
-		);
 	}
 }
 

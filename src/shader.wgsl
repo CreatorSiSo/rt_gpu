@@ -46,39 +46,80 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     let coord = vec2(in.uv.x * width, height * in.uv.y) * 2.0;
 
-    var ray: Ray;
-    ray.origin = vec3(0.0, 0.0, -2.0);
-    ray.direction = normalize(vec3(coord.x, coord.y, 0.0) - ray.origin);
-    // ray.origin = vec3(coord, -3.0);
-    // ray.direction = vec3(0.0, 0.0, 1.0);
+    var color = vec4(0.0);
+    let samples = 8u;
+
+    for (var n = 0u; n < samples; n += 1u) {
+        let jitter = vec2(
+            hash(coord + vec2(0.1 * f32(n), 0.2)),
+            hash(coord + vec2(0.3 * f32(n), 0.4))
+        );
+        let sample_coord = coord + jitter;
+
+        var ray: Ray;
+        ray.origin = vec3(0.0, 0.0, -2.0);
+        ray.direction = normalize(vec3(coord.x, coord.y, 0.0) - ray.origin);
+        // ray.origin = vec3(coord, -3.0);
+        // ray.direction = vec3(0.0, 0.0, 1.0);
+
+        color += trace_ray(ray);
+    }
+
+    return vec4(color.xyz / f32(samples), 1.0);
+}
+
+fn hash(p: vec2<f32>) -> f32 {
+    let dot_product = dot(p, vec2(127.1, 311.7));
+    return fract(sin(dot_product) * 43758.5453123);
+}
+
+fn trace_ray(ray_outer: Ray) -> vec4<f32> {
+    var ray = ray_outer;
+    var color = vec4(0.0, 0.0, 0.0, 1.0);
+    var attenuation = 1.0;
 
     var hit: Hit;
     hit.distance = f32_max;
     var nearest_sphere: Sphere;
 
-    for (var i = 0u; i <= arrayLength(&spheres); i += 1u) {
-        let sphere = spheres[i];
-        let maybe_hit = hit_sphere(ray, sphere);
-        if maybe_hit.intersected && hit.distance > maybe_hit.distance {
-            hit = maybe_hit;
-            nearest_sphere = sphere;
+    let bounces = 4u;
+
+    for (var n = 0u; n <= bounces; n += 1u) {
+        for (var i = 0u; i <= arrayLength(&spheres); i += 1u) {
+            let sphere = spheres[i];
+            let maybe_hit = hit_sphere(ray, sphere);
+            if maybe_hit.intersected && hit.distance > maybe_hit.distance {
+                hit = maybe_hit;
+                nearest_sphere = sphere;
+            }
         }
+
+        if !hit.intersected {
+          break;
+        }
+
+
+        let light_dir = normalize(vec3(1.0, 1.0, -1.0));
+        let light = clamp(dot(hit.normal, light_dir), 0.0, 1.0);
+        color += nearest_sphere.color * light * attenuation;
+
+        attenuation *= 0.5;
+        if attenuation < 0.01 {
+          break;
+        }
+
+        ray.origin = hit.position;
+        ray.direction = reflect(ray.direction, hit.normal);
     }
 
-    if !hit.intersected {
-        return vec4(0.0, 0.0, 0.0, 1.0);
-    }
-
-    let hit_pos = position_on_ray(ray, hit.distance);
-    let normal = sphere_normal(nearest_sphere, hit_pos);
-    let light = dot(normal, normalize(vec3(1.0, 1.0, -1.0)));
-    let color = nearest_sphere.color * light;
     return color;
 }
 
 struct Hit {
   intersected: bool,
   distance: f32,
+  normal: vec3<f32>,
+  position: vec3<f32>,
 }
 
 fn hit_sphere(ray: Ray, sphere: Sphere) -> Hit {
@@ -139,6 +180,10 @@ fn hit_sphere(ray: Ray, sphere: Sphere) -> Hit {
 
     hit.intersected = true;
     hit.distance = t_near;
+
+    hit.position = position_on_ray(ray, hit.distance);
+    hit.normal = sphere_normal(sphere, hit.position);
+
     return hit;
 }
 
