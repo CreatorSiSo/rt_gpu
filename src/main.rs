@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use bevy_ecs::component::Component;
 use bevy_ecs::event::{Event, EventReader, Events};
 use bevy_ecs::schedule::{IntoSystemConfigs, ScheduleLabel, Schedules};
-use bevy_ecs::system::{Commands, Query, ResMut, Resource};
+use bevy_ecs::system::{Commands, Query, Res, ResMut, Resource};
 use bevy_ecs::world::World;
 use glam::{Vec3, Vec4};
 use pollster::FutureExt;
@@ -30,6 +30,7 @@ impl App {
 		world.init_resource::<Schedules>();
 		world.init_resource::<Events<WinitEvent>>();
 		world.init_resource::<RenderTargets>();
+		world.init_resource::<Time>();
 
 		Self {
 			world,
@@ -64,6 +65,7 @@ impl App {
 
 		if should_update {
 			self.redraw_requested = false;
+			self.world.run_schedule(PreUpdate);
 			self.world.run_schedule(Update);
 			self.last_update = now;
 			self.world.run_schedule(Extract);
@@ -127,6 +129,31 @@ impl ApplicationHandler for App {
 enum WinitEvent {
 	Resized(WindowId, PhysicalSize<u32>),
 	CursorMoved(DeviceId, PhysicalPosition<f64>),
+}
+
+#[derive(Resource)]
+struct Time {
+	start: Instant,
+	time_ms: f64,
+}
+
+impl Default for Time {
+	fn default() -> Self {
+		Self {
+			start: Instant::now(),
+			time_ms: 0.0,
+		}
+	}
+}
+
+impl Time {
+	fn elapsed_ms(&self) -> f64 {
+		self.time_ms
+	}
+
+	fn update(&mut self) {
+		self.time_ms = Instant::now().duration_since(self.start).as_millis() as f64;
+	}
 }
 
 #[derive(Resource, Default)]
@@ -228,6 +255,9 @@ impl RenderTarget {
 struct Startup;
 
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
+struct PreUpdate;
+
+#[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
 struct Update;
 
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
@@ -239,7 +269,10 @@ struct Render;
 fn main() -> anyhow::Result<()> {
 	App::new()
 		.add_systems(Startup, generate_scene)
-		.add_systems(Update, || {})
+		.add_systems(PreUpdate, |mut time: ResMut<Time>| {
+			time.update();
+		})
+		.add_systems(Update, animate_spheres)
 		.add_systems(Extract, extract_spheres)
 		.add_systems(Render, render)
 		.run();
@@ -275,6 +308,39 @@ fn generate_scene(mut commands: Commands) {
 			color: Vec4::new(1.0, 0.1, 0.1, 1.0),
 		},
 	]);
+}
+
+fn animate_spheres(mut spheres: Query<&mut Sphere>, time: Res<Time>) {
+	/// Hash-like pseudo-random float generator
+	fn hash_float(mut x: f32) -> f32 {
+		x = (x * 0.1031).sin() * 43758.5453123;
+		x = x.fract();
+		if x < 0.0 {
+			x + 1.0
+		} else {
+			x
+		}
+	}
+
+	/// Pseudo-random RGB color from a single f32 seed.
+	/// Output is in [0.0, 1.0]^3, and not mirrored around 0.0.
+	pub fn pseudo_random_color(seed: f32) -> Vec4 {
+		let r = hash_float(seed + 1.23);
+		let g = hash_float(seed + 7.89);
+		let b = hash_float(seed + 4.56);
+
+		Vec4::new(r, g, b, 1.0)
+	}
+
+	for mut sphere in &mut spheres {
+		let elapsed = time.elapsed_ms() as f32;
+		let sin = f32::sin(elapsed / 1000.0 + sphere.position.x);
+		sphere.position.y = sin;
+		sphere.color = Vec4::new(0.0, 0.0, 0.0, 0.0).lerp(
+			pseudo_random_color(sphere.position.x * 50.0),
+			(sin + 1.0) / 2.0,
+		);
+	}
 }
 
 fn extract_spheres(spheres: Query<&Sphere>, mut targets: ResMut<RenderTargets>) {
