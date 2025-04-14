@@ -12,6 +12,14 @@ pub struct CameraUniform {
 }
 
 #[repr(C)]
+#[repr(align(8))]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct TimeUniform {
+	elapsed_ms: f32,
+	_padding: u32,
+}
+
+#[repr(C)]
 #[repr(align(16))]
 #[derive(Component, Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Sphere {
@@ -151,6 +159,8 @@ pub struct Renderer {
 	index_buffer: wgpu::Buffer,
 	camera_buffer: wgpu::Buffer,
 	camera_bind_group: wgpu::BindGroup,
+	time_buffer: wgpu::Buffer,
+	time_bind_group: wgpu::BindGroup,
 	objects_buffer: Option<wgpu::Buffer>,
 	objects_bind_group: Option<wgpu::BindGroup>,
 }
@@ -216,6 +226,34 @@ impl Renderer {
 			}],
 		);
 
+		let time_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+			label: Some("Time Buffer"),
+			contents: bytemuck::cast_slice(&[TimeUniform {
+				elapsed_ms: 0.0,
+				_padding: 0,
+			}]),
+			usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+		});
+
+		let (time_bind_group_layout, time_bind_group) = create_bind_group(
+			&device,
+			"Time",
+			&[wgpu::BindGroupLayoutEntry {
+				binding: 0,
+				visibility: wgpu::ShaderStages::FRAGMENT,
+				ty: wgpu::BindingType::Buffer {
+					ty: wgpu::BufferBindingType::Uniform,
+					has_dynamic_offset: false,
+					min_binding_size: None,
+				},
+				count: None,
+			}],
+			&[wgpu::BindGroupEntry {
+				binding: 0,
+				resource: wgpu::BindingResource::Buffer(time_buffer.as_entire_buffer_binding()),
+			}],
+		);
+
 		let (objects_bind_group_layout, objects_buffer, objects_bind_group) =
 			create_objects_buffer(&device, 0);
 
@@ -224,7 +262,11 @@ impl Renderer {
 
 		let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 			label: Some("Render Pipeline Layout"),
-			bind_group_layouts: &[&camera_bind_group_layout, &objects_bind_group_layout],
+			bind_group_layouts: &[
+				&camera_bind_group_layout,
+				&time_bind_group_layout,
+				&objects_bind_group_layout,
+			],
 			push_constant_ranges: &[],
 		});
 
@@ -264,9 +306,30 @@ impl Renderer {
 			index_buffer,
 			camera_buffer,
 			camera_bind_group,
+			time_buffer,
+			time_bind_group,
 			objects_buffer,
 			objects_bind_group,
 		})
+	}
+
+	pub fn update_camera(&mut self, width: u32, height: u32) {
+		self.queue.write_buffer(
+			&self.camera_buffer,
+			0,
+			bytemuck::cast_slice(&[CameraUniform { width, height }]),
+		)
+	}
+
+	pub fn update_time(&mut self, elapsed_ms: f32) {
+		self.queue.write_buffer(
+			&self.time_buffer,
+			0,
+			bytemuck::cast_slice(&[TimeUniform {
+				elapsed_ms,
+				_padding: 0,
+			}]),
+		)
 	}
 
 	pub fn update_spheres<'a>(&mut self, spheres: impl ExactSizeIterator<Item = &'a Sphere>) {
@@ -303,14 +366,6 @@ impl Renderer {
 		}
 	}
 
-	pub fn update_camera(&mut self, width: u32, height: u32) {
-		self.queue.write_buffer(
-			&self.camera_buffer,
-			0,
-			bytemuck::cast_slice(&[CameraUniform { width, height }]),
-		)
-	}
-
 	/// Renders the next frame into the provided [`wgpu::Texture`]
 	pub fn render(&mut self, texture: &wgpu::Texture) {
 		let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -341,7 +396,8 @@ impl Renderer {
 			render_pass.set_pipeline(&self.render_pipeline);
 
 			render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-			render_pass.set_bind_group(1, &self.objects_bind_group, &[]);
+			render_pass.set_bind_group(1, &self.time_bind_group, &[]);
+			render_pass.set_bind_group(2, &self.objects_bind_group, &[]);
 
 			render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
 			render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);

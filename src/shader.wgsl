@@ -29,12 +29,20 @@ struct Camera {
 @binding(0)
 var<uniform> camera: Camera;
 
+struct Time {
+  elapsed_ms: f32,
+  _padding: u32,
+}
+@group(1)
+@binding(0)
+var<uniform> time: Time;
+
 struct Sphere {
   position: vec3<f32>,
   radius: f32,
   color: vec4<f32>,
 }
-@group(1)
+@group(2)
 @binding(0)
 var<storage, read> spheres: array<Sphere>;
 
@@ -50,15 +58,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let samples = 8u;
 
     for (var n = 0u; n < samples; n += 1u) {
-        let jitter = vec2(
-            hash(coord + vec2(0.1 * f32(n), 0.2)),
-            hash(coord + vec2(0.3 * f32(n), 0.4))
-        );
+        let jitter = random(coord, f32(u32(time.elapsed_ms) % 20) / 20.0) * 0.005;
         let sample_coord = coord + jitter;
 
         var ray: Ray;
         ray.origin = vec3(0.0, 0.0, -2.0);
-        ray.direction = normalize(vec3(coord.x, coord.y, 0.0) - ray.origin);
+        ray.direction = normalize(vec3(sample_coord.x, sample_coord.y, 0.0) - ray.origin);
         // ray.origin = vec3(coord, -3.0);
         // ray.direction = vec3(0.0, 0.0, 1.0);
 
@@ -68,9 +73,24 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     return vec4(color.xyz / f32(samples), 1.0);
 }
 
-fn hash(p: vec2<f32>) -> f32 {
-    let dot_product = dot(p, vec2(127.1, 311.7));
-    return fract(sin(dot_product) * 43758.5453123);
+fn hash12(p: vec2<f32>, seed: f32) -> f32 {
+    let k1 = 50.0;
+    let k2 = 161.0;
+
+    let dot_val = dot(p, vec2<f32>(k1, k2)) + seed * 43758.5453;
+    let sin_val = sin(dot_val);
+    return fract(sin_val * 43758.5453);
+}
+
+fn hash22(p: vec2<f32>, seed: f32) -> vec2<f32> {
+    return vec2<f32>(
+        hash12(p + vec2<f32>(1.0, 0.0), seed),
+        hash12(p + vec2<f32>(0.0, 1.0), seed)
+    );
+}
+
+fn random(data: vec2<f32>, seed: f32) -> vec2<f32> {
+    return hash22(data, seed);
 }
 
 fn trace_ray(ray_outer: Ray) -> vec4<f32> {

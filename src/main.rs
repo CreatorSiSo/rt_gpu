@@ -273,6 +273,7 @@ fn main() -> anyhow::Result<()> {
 			time.update();
 		})
 		.add_systems(Update, animate_spheres)
+		.add_systems(Extract, extract_time)
 		.add_systems(Extract, extract_spheres)
 		.add_systems(Render, render)
 		.run();
@@ -321,6 +322,12 @@ fn animate_spheres(mut spheres: Query<&mut Sphere>, time: Res<Time>) {
 fn extract_spheres(spheres: Query<&Sphere>, mut targets: ResMut<RenderTargets>) {
 	for target in targets.iter_mut() {
 		target.renderer.update_spheres(spheres.iter());
+	}
+}
+
+fn extract_time(time: Res<Time>, mut targets: ResMut<RenderTargets>) {
+	for target in targets.iter_mut() {
+		target.renderer.update_time(time.elapsed_ms() as f32);
 	}
 }
 
