@@ -1,5 +1,6 @@
+use bevy_ecs::component::Component;
 use glam::{Vec2, Vec3, Vec4};
-use std::{borrow::Cow, collections::HashMap};
+use std::{borrow::Cow, collections::HashMap, num::NonZero};
 use wgpu::{util::DeviceExt, PipelineCompilationOptions};
 
 #[repr(C)]
@@ -12,7 +13,7 @@ pub struct CameraUniform {
 
 #[repr(C)]
 #[repr(align(16))]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Component, Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Sphere {
 	pub position: Vec3,
 	pub radius: f32,
@@ -96,15 +97,62 @@ fn create_shader_module(
 	})
 }
 
+fn create_objects_buffer(
+	device: &wgpu::Device,
+	size: u64,
+) -> (
+	wgpu::BindGroupLayout,
+	Option<wgpu::Buffer>,
+	Option<wgpu::BindGroup>,
+) {
+	let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+		label: Some("Objects Bind Group Layout"),
+		entries: &[wgpu::BindGroupLayoutEntry {
+			binding: 0,
+			visibility: wgpu::ShaderStages::FRAGMENT,
+			ty: wgpu::BindingType::Buffer {
+				ty: wgpu::BufferBindingType::Storage { read_only: true },
+				has_dynamic_offset: false,
+				min_binding_size: None,
+			},
+			// TODO Set correct size
+			count: None,
+		}],
+	});
+
+	if size == 0 {
+		return (bind_group_layout, None, None);
+	}
+
+	let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+		label: Some("Object Buffer"),
+		usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+		size,
+		mapped_at_creation: false,
+	});
+
+	let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+		label: Some("Objects Bind Group"),
+		layout: &bind_group_layout,
+		entries: &[wgpu::BindGroupEntry {
+			binding: 0,
+			resource: buffer.as_entire_binding(),
+		}],
+	});
+
+	(bind_group_layout, Some(buffer), Some(bind_group))
+}
+
 pub struct Renderer {
 	pub device: wgpu::Device,
 	queue: wgpu::Queue,
 	render_pipeline: wgpu::RenderPipeline,
 	vertex_buffer: wgpu::Buffer,
 	index_buffer: wgpu::Buffer,
-	objects_bind_group: wgpu::BindGroup,
 	camera_buffer: wgpu::Buffer,
 	camera_bind_group: wgpu::BindGroup,
+	objects_buffer: Option<wgpu::Buffer>,
+	objects_bind_group: Option<wgpu::BindGroup>,
 }
 
 impl Renderer {
@@ -168,58 +216,8 @@ impl Renderer {
 			}],
 		);
 
-		let spheres = &[
-			Sphere {
-				radius: 1.0,
-				position: Vec3::new(-1.5, 0.0, 0.5),
-				color: Vec4::new(1.0, 0.1, 0.1, 1.0),
-			},
-			Sphere {
-				radius: 0.5,
-				position: Vec3::new(-0.5, 0.0, 0.2),
-				color: Vec4::new(0.1, 1.0, 0.1, 1.0),
-			},
-			Sphere {
-				radius: 0.25,
-				position: Vec3::new(0.0, 0.0, 0.0),
-				color: Vec4::new(0.1, 0.1, 1.0, 1.0),
-			},
-			Sphere {
-				radius: 0.5,
-				position: Vec3::new(0.5, 0.0, 0.2),
-				color: Vec4::new(0.0, 1.0, 0.1, 1.0),
-			},
-			Sphere {
-				radius: 1.0,
-				position: Vec3::new(1.5, 0.0, 0.5),
-				color: Vec4::new(1.0, 0.1, 0.1, 1.0),
-			},
-		];
-
-		let object_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-			label: Some("Object Buffer"),
-			contents: bytemuck::cast_slice(spheres),
-			usage: wgpu::BufferUsages::STORAGE,
-		});
-
-		let (objects_bind_group_layout, objects_bind_group) = create_bind_group(
-			&device,
-			"Object",
-			&[wgpu::BindGroupLayoutEntry {
-				binding: 0,
-				visibility: wgpu::ShaderStages::FRAGMENT,
-				ty: wgpu::BindingType::Buffer {
-					ty: wgpu::BufferBindingType::Storage { read_only: true },
-					has_dynamic_offset: false,
-					min_binding_size: None,
-				},
-				count: None,
-			}],
-			&[wgpu::BindGroupEntry {
-				binding: 0,
-				resource: object_buffer.as_entire_binding(),
-			}],
-		);
+		let (objects_bind_group_layout, objects_buffer, objects_bind_group) =
+			create_objects_buffer(&device, 0);
 
 		// Load the shaders from disk
 		let shader = create_shader_module(&device, "Screen Shader", include_str!("shader.wgsl"));
@@ -266,8 +264,43 @@ impl Renderer {
 			index_buffer,
 			camera_buffer,
 			camera_bind_group,
+			objects_buffer,
 			objects_bind_group,
 		})
+	}
+
+	pub fn update_spheres<'a>(&mut self, spheres: impl ExactSizeIterator<Item = &'a Sphere>) {
+		const SPHERE_SIZE: usize = std::mem::size_of::<Sphere>();
+
+		let new_size = (spheres.len() * SPHERE_SIZE) as u64;
+		if new_size == 0 {
+			return;
+		}
+
+		let resize = match &self.objects_buffer {
+			None => true,
+			Some(buffer) => buffer.size() != new_size,
+		};
+		if resize {
+			self.objects_buffer.as_ref().map(|buffer| buffer.unmap());
+			let (_, objects_buffer, objects_bind_group) =
+				create_objects_buffer(&self.device, new_size);
+			self.objects_buffer = objects_buffer;
+			self.objects_bind_group = objects_bind_group;
+		}
+
+		let mut buffer_view = self
+			.queue
+			.write_buffer_with(
+				&self.objects_buffer.as_ref().unwrap(),
+				0,
+				NonZero::new(new_size).unwrap(),
+			)
+			.unwrap();
+		let chunks = buffer_view.chunks_mut(SPHERE_SIZE);
+		for (sphere, chunk) in spheres.zip(chunks) {
+			chunk.copy_from_slice(bytemuck::cast_slice(&[*sphere]));
+		}
 	}
 
 	pub fn update_camera(&mut self, width: u32, height: u32) {

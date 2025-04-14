@@ -1,22 +1,26 @@
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use bevy_ecs::component::Component;
 use bevy_ecs::event::{Event, EventReader, Events};
 use bevy_ecs::schedule::{IntoSystemConfigs, ScheduleLabel, Schedules};
-use bevy_ecs::system::{ResMut, Resource};
+use bevy_ecs::system::{Commands, Query, ResMut, Resource};
 use bevy_ecs::world::World;
+use glam::{Vec3, Vec4};
 use pollster::FutureExt;
 use winit::application::ApplicationHandler;
-use winit::dpi::PhysicalSize;
-use winit::event::WindowEvent;
+use winit::dpi::{PhysicalPosition, PhysicalSize};
+use winit::event::{DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
 
 mod renderer;
-use renderer::Renderer;
+use renderer::{Renderer, Sphere};
 
 struct App {
 	world: World,
+	redraw_requested: bool,
+	last_update: Instant,
 }
 
 impl App {
@@ -27,7 +31,11 @@ impl App {
 		world.init_resource::<Events<WinitEvent>>();
 		world.init_resource::<RenderTargets>();
 
-		Self { world }
+		Self {
+			world,
+			last_update: Instant::now(),
+			redraw_requested: false,
+		}
 	}
 
 	pub fn run(&mut self) {
@@ -48,6 +56,20 @@ impl App {
 		schedules.add_systems(schedule, systems);
 		self
 	}
+
+	fn redraw_requested(&mut self, _event_loop: &ActiveEventLoop) {
+		let now = Instant::now();
+		let should_update = self.redraw_requested
+			|| now.duration_since(self.last_update) >= Duration::from_millis(10);
+
+		if should_update {
+			self.redraw_requested = false;
+			self.world.run_schedule(Update);
+			self.last_update = now;
+			self.world.run_schedule(Extract);
+			self.world.run_schedule(Render);
+		}
+	}
 }
 
 impl ApplicationHandler for App {
@@ -61,6 +83,10 @@ impl ApplicationHandler for App {
 			.add(window);
 	}
 
+	fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+		self.redraw_requested(event_loop);
+	}
+
 	fn window_event(
 		&mut self,
 		event_loop: &ActiveEventLoop,
@@ -71,7 +97,8 @@ impl ApplicationHandler for App {
 		let mut targets = self.world.get_resource_mut::<RenderTargets>().unwrap();
 		match event {
 			WindowEvent::RedrawRequested => {
-				self.world.run_schedule(Update);
+				self.redraw_requested = true;
+				self.redraw_requested(event_loop);
 			}
 			WindowEvent::CloseRequested => {
 				targets.remove(window_id);
@@ -82,9 +109,24 @@ impl ApplicationHandler for App {
 			WindowEvent::Resized(size) => {
 				self.world.send_event(Resized(window_id, size)).unwrap();
 			}
+			WindowEvent::CursorMoved {
+				device_id,
+				position,
+			} => {
+				self.world
+					.send_event(CursorMoved(device_id, position))
+					.unwrap();
+			}
 			_ => (),
 		};
 	}
+}
+
+#[derive(Event, Debug)]
+#[non_exhaustive]
+enum WinitEvent {
+	Resized(WindowId, PhysicalSize<u32>),
+	CursorMoved(DeviceId, PhysicalPosition<f64>),
 }
 
 #[derive(Resource, Default)]
@@ -182,25 +224,63 @@ impl RenderTarget {
 	}
 }
 
-#[derive(Event, Debug)]
-#[non_exhaustive]
-enum WinitEvent {
-	Resized(WindowId, PhysicalSize<u32>),
-}
-
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
 struct Startup;
 
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
 struct Update;
 
+#[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
+struct Extract;
+
+#[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
+struct Render;
+
 fn main() -> anyhow::Result<()> {
 	App::new()
-		.add_systems(Startup, hello_world)
-		.add_systems(Update, render)
+		.add_systems(Startup, generate_scene)
+		.add_systems(Update, || {})
+		.add_systems(Extract, extract_spheres)
+		.add_systems(Render, render)
 		.run();
 
 	Ok(())
+}
+
+fn generate_scene(mut commands: Commands) {
+	commands.spawn_batch(vec![
+		Sphere {
+			radius: 1.0,
+			position: Vec3::new(-1.5, 0.0, 0.5),
+			color: Vec4::new(1.0, 0.1, 0.1, 1.0),
+		},
+		Sphere {
+			radius: 0.5,
+			position: Vec3::new(-0.5, 0.0, 0.2),
+			color: Vec4::new(0.1, 1.0, 0.1, 1.0),
+		},
+		Sphere {
+			radius: 0.25,
+			position: Vec3::new(0.0, 0.0, 0.0),
+			color: Vec4::new(0.1, 0.1, 1.0, 1.0),
+		},
+		Sphere {
+			radius: 0.5,
+			position: Vec3::new(0.5, 0.0, 0.2),
+			color: Vec4::new(0.0, 1.0, 0.1, 1.0),
+		},
+		Sphere {
+			radius: 1.0,
+			position: Vec3::new(1.5, 0.0, 0.5),
+			color: Vec4::new(1.0, 0.1, 0.1, 1.0),
+		},
+	]);
+}
+
+fn extract_spheres(spheres: Query<&Sphere>, mut targets: ResMut<RenderTargets>) {
+	for target in targets.iter_mut() {
+		target.renderer.update_spheres(spheres.iter());
+	}
 }
 
 fn render(mut events: EventReader<WinitEvent>, mut targets: ResMut<RenderTargets>) {
@@ -209,8 +289,8 @@ fn render(mut events: EventReader<WinitEvent>, mut targets: ResMut<RenderTargets
 			WinitEvent::Resized(window_id, physical_size) => {
 				targets.get_mut(*window_id).unwrap().resize(*physical_size);
 			}
+			_ => {}
 		}
-		println!("{event:?}");
 	}
 
 	for target in targets.iter_mut() {
@@ -233,8 +313,4 @@ fn render(mut events: EventReader<WinitEvent>, mut targets: ResMut<RenderTargets
 		target.renderer.render(&surface_texture.texture);
 		surface_texture.present();
 	}
-}
-
-fn hello_world() {
-	println!("Hello world!");
 }
